@@ -11,6 +11,8 @@ import ProviderSettingsPanel from './components/shared/ProviderSettingsPanel';
 
 import StepIndicator from './components/shared/StepIndicator';
 import PipelineTracker from './components/PipelineTracker';
+import PipelineConsole from './components/PipelineConsole';
+import { PipelineRunState } from './services/pipelineRunner';
 import MarketResearchStep from './components/steps/MarketResearchStep';
 import MarketReportDisplay from './components/steps/market/MarketReportDisplay';
 import OutlineStep from './components/steps/OutlineStep';
@@ -69,6 +71,7 @@ function App() {
   const [exampleCoverUrl, setExampleCoverUrl] = useState<string | null>(null);
   const [isGeneratingExampleCover, setIsGeneratingExampleCover] = useState(false);
   const [automationPayload, setAutomationPayload] = useState<KdpAutomationPayload | null>(null);
+  const [isPipelineOpen, setIsPipelineOpen] = useState(false);
   const [isGeneratingFullManuscript, setIsGeneratingFullManuscript] = useState(false);
   const [fullManuscriptGenerationProgress, setFullManuscriptGenerationProgress] = useState('');
   const [isRegeneratingWithFeedback, setIsRegeneratingWithFeedback] = useState(false);
@@ -802,6 +805,17 @@ function App() {
     setAutomationPayload(payload);
   };
 
+  /** Load a finished pipeline run into the workspace and jump to Review. */
+  const handlePipelineComplete = (runState: PipelineRunState) => {
+    if (runState.marketReport) setMarketReport(runState.marketReport);
+    if (runState.outline) setBookOutline(runState.outline);
+    if (runState.coverUrl) setBookCoverUrl(runState.coverUrl);
+    if (runState.marketingInfo) setKdpMarketingInfo(runState.marketingInfo);
+    setHasViewedReport(true);
+    setIsPipelineOpen(false);
+    setCurrentStep(AppStep.Review);
+  };
+
   const handleStartBatchGeneration = useCallback(async (projectsToGenerate: {title: string, subtitle: string}[], settings: { genre: string, pageRange: string }) => {
     setIsBatchRunning(true);
     const initialProjects: BatchProject[] = projectsToGenerate.map((p, i) => ({
@@ -1139,6 +1153,14 @@ function App() {
                      </div>
                 )}
             
+              <button
+                onClick={() => setIsPipelineOpen(true)}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-md hover:bg-violet-900/40 transition-colors text-violet-300 hover:text-violet-200 border border-violet-700/50"
+                title="Run the full 12-stage book-forge pipeline"
+              >
+                <RocketLaunchIcon className="w-5 h-5" />
+                <span className="text-sm font-medium hidden sm:inline">Full Pipeline</span>
+              </button>
               <button 
                 onClick={() => setIsAuthorModalOpen(true)} 
                 className="flex items-center gap-2 px-3 py-1.5 rounded-md hover:bg-slate-800 transition-colors text-slate-400 hover:text-white"
@@ -1218,6 +1240,13 @@ function App() {
             onClose={() => setIsAuthorModalOpen(false)} 
             bookOutline={bookOutline}
             marketReport={marketReport}
+        />
+      )}
+      {isPipelineOpen && (
+        <PipelineConsole
+            authorProfile={authorProfile}
+            onClose={() => setIsPipelineOpen(false)}
+            onPipelineComplete={handlePipelineComplete}
         />
       )}
       <NativeMenuCenter panel={nativeMenuPanel} onClose={() => setNativeMenuPanel(null)} />
