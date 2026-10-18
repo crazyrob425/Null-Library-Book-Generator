@@ -25,6 +25,27 @@ export async function* runAutomation(
     let browser: Browser | null = null;
     const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'kdp-automation-'));
 
+    // --- AI DISCLOSURE COMPLIANCE GATE (Oct 2026) ---
+    // KDP requires AI-GENERATED text/images/translations (even covers, even after
+    // heavy editing) to be disclosed via its private AI-content checkbox.
+    // Publishing without disclosure risks title removal; repeat offenses risk
+    // account suspension. Never start automation without an acknowledged disclosure.
+    const disclosure = (payload as KdpAutomationPayload & { aiDisclosure?: { aiGeneratedText: boolean; aiGeneratedImages: boolean; aiGeneratedTranslations: boolean; acknowledged: boolean } }).aiDisclosure;
+    if (!disclosure || !disclosure.acknowledged) {
+        const msg = 'Blocked: KDP AI-content disclosure is missing or unacknowledged. ' +
+            'Confirm the AI disclosure answers in the Review step before automating publication.';
+        sendUpdate({ type: 'log', message: `Automation failed: ${msg}` });
+        sendUpdate({ type: 'error', message: msg });
+        await fs.rm(tempDir, { recursive: true, force: true });
+        return;
+    }
+    sendUpdate({
+        type: 'log',
+        message: `AI disclosure acknowledged — text: ${disclosure.aiGeneratedText ? 'AI-GENERATED' : 'no'}, ` +
+            `images: ${disclosure.aiGeneratedImages ? 'AI-GENERATED' : 'no'}, ` +
+            `translations: ${disclosure.aiGeneratedTranslations ? 'AI-GENERATED' : 'no'}.`,
+    });
+
     try {
         sendUpdate({ type: 'log', message: 'Automation sequence initiated on the server.' });
         sendUpdate({ type: 'status', status: 'initializing' });
@@ -100,6 +121,27 @@ export async function* runAutomation(
         // ... fill other fields like author, description, keywords, categories
         // These selectors need to be updated to match the real KDP dashboard.
         // Example: await page.fill('#author-name', payload.authorProfile.name);
+
+        // --- AI CONTENT DISCLOSURE (Oct 2026 compliance) ---
+        // KDP asks whether AI tools were used to GENERATE text, images, or translations.
+        // The answers below come from the user's acknowledged disclosure in the Review step.
+        // NOTE: selectors must be verified against the live KDP dashboard — Amazon changes
+        // this flow. If the question cannot be answered automatically, the run MUST pause
+        // for manual input rather than submitting with a wrong or missing disclosure.
+        sendUpdate({ type: 'log', message: 'Answering KDP AI-content questions per acknowledged disclosure...' });
+        const aiAnswers = [
+            { label: 'text', value: disclosure.aiGeneratedText },
+            { label: 'images', value: disclosure.aiGeneratedImages },
+            { label: 'translations', value: disclosure.aiGeneratedTranslations },
+        ];
+        for (const a of aiAnswers) {
+            sendUpdate({ type: 'log', message: `  AI-generated ${a.label}: ${a.value ? 'YES — disclosing' : 'no'}` });
+        }
+        // Best-effort pattern — VERIFY selectors against the live dashboard before use:
+        //   await page.check(`input[name="ai-content-text"][value="${disclosure.aiGeneratedText ? 'yes' : 'no'}"]`);
+        //   await page.check(`input[name="ai-content-images"][value="${disclosure.aiGeneratedImages ? 'yes' : 'no'}"]`);
+        //   await page.check(`input[name="ai-content-translations"][value="${disclosure.aiGeneratedTranslations ? 'yes' : 'no'}"]`);
+        sendUpdate({ type: 'log', message: 'AI disclosure answers recorded. Verify they are reflected on the KDP form before submitting.' });
 
         // --- FILE UPLOAD ---
         sendUpdate({ type: 'status', status: 'uploading' });

@@ -1,7 +1,7 @@
 
 
 import React, { useState, useEffect } from 'react';
-import { BookOutline, AuthorProfile, KdpMarketingInfo, KdpAutomationPayload, MarketReport, Chapter } from '../../types';
+import { BookOutline, AuthorProfile, KdpMarketingInfo, KdpAutomationPayload, MarketReport, Chapter, AiContentDisclosure, emptyAiContentDisclosure } from '../../types';
 import * as geminiService from '../../services/geminiService';
 import generateEpub from '../../services/epubGenerator';
 import Card from '../shared/Card';
@@ -89,6 +89,8 @@ const ReviewStep: React.FC<ReviewStepProps> = ({
   const [isPreparingAutomation, setIsPreparingAutomation] = useState(false);
   const [regenerationFeedback, setRegenerationFeedback] = useState('');
   const [isCoverEditorOpen, setIsCoverEditorOpen] = useState(false);
+  // KDP AI-content disclosure (Oct 2026 compliance) — automation is blocked until acknowledged.
+  const [aiDisclosure, setAiDisclosure] = useState<AiContentDisclosure>(emptyAiContentDisclosure());
 
   // States for Chapter Edit Modal
   const [editingChapterIndex, setEditingChapterIndex] = useState<number | null>(null);
@@ -328,6 +330,10 @@ ${marketingInfo.keywords.join(', ')}
       alert("Cannot start automation. Ensure cover, marketing, and author info are finalized.");
       return;
     }
+    if (!aiDisclosure.acknowledged) {
+      alert("KDP AI-content disclosure is required: confirm your answers below before automating publication. Publishing AI-generated content without disclosure risks title removal and account suspension.");
+      return;
+    }
     setIsPreparingAutomation(true);
     try {
       const epubBlob = await generateEpub(outline, displayProfile, bookCoverUrl);
@@ -336,7 +342,8 @@ ${marketingInfo.keywords.join(', ')}
         kdpMarketingInfo,
         authorProfile: displayProfile,
         epubBlob,
-        coverImageUrl: bookCoverUrl
+        coverImageUrl: bookCoverUrl,
+        aiDisclosure,
       });
     } catch (e) {
       console.error("Failed to prepare data for automation:", e);
@@ -594,6 +601,42 @@ ${marketingInfo.keywords.join(', ')}
              <p className="text-slate-300 text-center mb-6 max-w-2xl mx-auto">
                 Your book is ready. Download the complete KDP package or deploy our Automation Bot to publish it for you.
              </p>
+             {/* KDP AI-content disclosure (Oct 2026 compliance) */}
+             <div className="max-w-2xl mx-auto mb-6 rounded-lg border border-amber-500/40 bg-amber-950/30 p-4">
+                <h4 className="text-sm font-bold text-amber-300 mb-1">KDP AI-Content Disclosure — required</h4>
+                <p className="text-xs text-slate-300 mb-3">
+                  Amazon requires disclosure when AI <em>generated</em> your text, images, or translations —
+                  including covers, even after heavy editing. AI-<em>assisted</em> content needs no disclosure.
+                  Publishing AI-generated content without disclosure risks title removal; repeat offenses risk
+                  account suspension.
+                </p>
+                <div className="space-y-2 text-sm text-slate-200">
+                  {([
+                    ['aiGeneratedText', 'AI generated any of the book\u2019s text'],
+                    ['aiGeneratedImages', 'AI generated the cover or interior images'],
+                    ['aiGeneratedTranslations', 'AI generated a translation of the book'],
+                  ] as const).map(([key, label]) => (
+                    <label key={key} className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={aiDisclosure[key]}
+                        onChange={(e) => setAiDisclosure({ ...aiDisclosure, [key]: e.target.checked, acknowledged: false })}
+                        className="w-4 h-4 accent-amber-500"
+                      />
+                      <span>{label}</span>
+                    </label>
+                  ))}
+                </div>
+                <label className="flex items-start gap-2 cursor-pointer mt-3 pt-3 border-t border-amber-500/30 text-sm text-slate-100">
+                  <input
+                    type="checkbox"
+                    checked={aiDisclosure.acknowledged}
+                    onChange={(e) => setAiDisclosure({ ...aiDisclosure, acknowledged: e.target.checked })}
+                    className="w-4 h-4 mt-0.5 accent-emerald-500"
+                  />
+                  <span>I confirm these answers are accurate and may be submitted to KDP on my behalf.</span>
+                </label>
+             </div>
              <div className="flex flex-col sm:flex-row justify-center items-center gap-4">
                  <Button 
                     onClick={handleSmartDownload} 

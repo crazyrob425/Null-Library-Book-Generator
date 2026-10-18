@@ -2,6 +2,7 @@ import { MarketReport, GoogleTrendsData, ResearchSource } from '../types';
 import { getAi } from './geminiService';
 import { GenerateContentResponse, Type } from "@google/genai";
 import desktopBridge from './desktopBridge';
+import { MARKET_INTEL_GROUNDING, getLaneForGenre } from './marketIntel';
 
 // ---------------------------------------------------------------------------
 // Optional: Tavily live web search (skipped gracefully when key is absent)
@@ -72,9 +73,16 @@ export const generateRealMarketReport = async (topic: string, genre?: string): P
         : '';
 
     // 5. Synthesize Report using Gemini with real data
+    // Ground the model with Oct 2026 market intel + the closest researched genre lane.
+    const lane = genre ? getLaneForGenre(genre) : undefined;
+    const laneBlock = lane
+        ? `\n\n**Closest researched genre lane for "${genre}": ${lane.name} — tropes: ${lane.tropes.join(', ')}; POV: ${lane.pov}; heat: ${lane.heat}; target ${lane.wordCount[0].toLocaleString()}–${lane.wordCount[1].toLocaleString()} words; price $${lane.price.toFixed(2)}; ${lane.distribution === 'KU' ? 'Kindle Unlimited exclusive' : 'wide distribution'}. Reasoning: ${lane.reasoning}`
+        : '';
+    const groundingBlock = `\n\n${MARKET_INTEL_GROUNDING}${laneBlock}`;
+
     const prompt = `
     Analyze the following REAL market data for the book topic "${topic}"${genre ? ` in genre "${genre}"` : ''}.
-    
+    ${groundingBlock}
     **Google Trends Data:**
     ${trendsData ? JSON.stringify(trendsData.interestOverTime.slice(-12)) : "Not available from desktop. Provide expert analysis instead."}
     

@@ -95,6 +95,8 @@ export class KdpAutomationClient {
                 keywords: payload.kdpMarketingInfo?.keywords ?? [],
                 coverImageUrl: payload.coverImageUrl,
                 epubBase64,
+                // KDP AI-content disclosure answers (Oct 2026 compliance)
+                aiDisclosure: payload.aiDisclosure ?? null,
             },
         });
 

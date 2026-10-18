@@ -178,6 +178,8 @@ export interface KdpAutomationPayload {
   authorProfile: AuthorProfile;
   epubBlob: Blob;
   coverImageUrl: string;
+  /** KDP AI-content disclosure answers; automation is blocked until acknowledged. */
+  aiDisclosure: AiContentDisclosure;
 }
 
 export type BotStatus = 'initializing' | 'running' | 'captcha' | 'uploading' | 'success' | 'error';
@@ -334,3 +336,51 @@ export interface ProjectFileV2 {
         selectedGenre?: GenreSuggestion;
     };
 }
+
+// --- 12-stage book-forge pipeline (Oct 2026) ---
+export type PipelineAutomatability = 'auto' | 'semi-auto' | 'human';
+
+export interface PipelineStageDef {
+  id: string;
+  name: string;
+  description: string;
+  appStep: AppStep;
+  qualityGate: string;
+  automatability: PipelineAutomatability;
+  /** True = a human must sign off before the pipeline advances past this stage. */
+  humanGate: boolean;
+}
+
+export type PipelineStageStatus = 'complete' | 'current' | 'locked';
+
+/** Measurable app-state signals used to derive per-stage status. */
+export interface PipelineSnapshot {
+  marketReport: boolean;
+  outline: boolean;
+  bible: boolean;
+  chaptersDrafted: boolean;
+  manuscriptComplete: boolean;
+  inReview: boolean;
+  coverReady: boolean;
+  marketingReady: boolean;
+  automationLaunched: boolean;
+}
+
+// --- KDP AI-content disclosure (Oct 2026 compliance) ---
+export interface AiContentDisclosure {
+  /** AI generated any of the book's text (even after heavy editing). */
+  aiGeneratedText: boolean;
+  /** AI generated the cover or interior images. */
+  aiGeneratedImages: boolean;
+  /** AI generated a translation of the book. */
+  aiGeneratedTranslations: boolean;
+  /** User confirms the answers above are accurate and may be submitted to KDP. */
+  acknowledged: boolean;
+}
+
+export const emptyAiContentDisclosure = (): AiContentDisclosure => ({
+  aiGeneratedText: false,
+  aiGeneratedImages: false,
+  aiGeneratedTranslations: false,
+  acknowledged: false,
+});

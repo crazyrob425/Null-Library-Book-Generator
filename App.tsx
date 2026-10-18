@@ -10,6 +10,7 @@ import { extractBibleEntries, embedChapter, clearVectorStore } from './services/
 import ProviderSettingsPanel from './components/shared/ProviderSettingsPanel';
 
 import StepIndicator from './components/shared/StepIndicator';
+import PipelineTracker from './components/PipelineTracker';
 import MarketResearchStep from './components/steps/MarketResearchStep';
 import MarketReportDisplay from './components/steps/market/MarketReportDisplay';
 import OutlineStep from './components/steps/OutlineStep';
@@ -1168,6 +1169,23 @@ function App() {
            {/* Progress Stepper */}
           <div className="mt-6 mb-2">
             <StepIndicator currentStep={currentStep} onStepClick={handleStepChange} />
+            <PipelineTracker
+              snapshot={{
+                marketReport: !!marketReport,
+                outline: !!bookOutline,
+                bible: !!((bookOutline?.bookBible?.characters?.length ?? 0) > 0 || bookBible),
+                chaptersDrafted: !!(bookOutline?.tableOfContents.some((c) => c.content)),
+                manuscriptComplete: !!(
+                  bookOutline &&
+                  bookOutline.tableOfContents.length > 0 &&
+                  bookOutline.tableOfContents.every((c) => c.content)
+                ),
+                inReview: currentStep >= AppStep.Review,
+                coverReady: !!bookCoverUrl,
+                marketingReady: !!kdpMarketingInfo,
+                automationLaunched: !!automationPayload,
+              }}
+            />
           </div>
         </div>
       </header>
