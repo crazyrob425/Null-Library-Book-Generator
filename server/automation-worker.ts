@@ -17,6 +17,110 @@ const dataUrlToBuffer = (dataUrl: string) => {
     return Buffer.from(base64, 'base64');
 };
 
+// ── Selector registry ───────────────────────────────────────────────────────
+// KDP's dashboard markup changes. Each entry lists candidate selectors in
+// priority order plus its verification status. See
+// docs/KDP_SELECTOR_VERIFICATION.md for the live-verification checklist.
+// Status: 'verified' = confirmed against the live dashboard,
+//         'placeholder' = best-effort guess, MUST be verified before trusting.
+type SelectorStatus = 'verified' | 'placeholder';
+const SELECTORS: Record<string, { candidates: string[]; status: SelectorStatus }> = {
+    loginEmail:    { candidates: ['input[type="email"]'], status: 'verified' },
+    loginSubmit:   { candidates: ['input[type="submit"]', 'button[type="submit"]'], status: 'verified' },
+    loginPassword: { candidates: ['input[type="password"]'], status: 'verified' },
+    captchaImage:  { candidates: ['#auth-captcha-image'], status: 'placeholder' },
+    captchaGuess:  { candidates: ['#auth-captcha-guess'], status: 'placeholder' },
+    captchaError:  { candidates: ['#auth-error-message-box'], status: 'placeholder' },
+    bookshelf:     { candidates: ['div[data-testid="bookshelf-page"]'], status: 'placeholder' },
+    createButton:  { candidates: ['#create-button'], status: 'placeholder' },
+    createEbook:   { candidates: ['div[data-testid="create-digital-book-button"]'], status: 'placeholder' },
+    bookTitle:     { candidates: ['input[data-testid="book-title-input"]'], status: 'placeholder' },
+    bookSubtitle:  { candidates: ['input[data-testid="book-subtitle-input"]'], status: 'placeholder' },
+    manuscriptUpload: { candidates: ['#manuscript-upload-button-test-id'], status: 'placeholder' },
+    manuscriptDone:   { candidates: ['#manuscript-upload-success-message'], status: 'placeholder' },
+    coverUpload:   { candidates: ['#cover-upload-button-test-id'], status: 'placeholder' },
+    coverDone:     { candidates: ['#cover-upload-success-message'], status: 'placeholder' },
+    saveContinue:  { candidates: ['#save-and-continue-button-test-id'], status: 'placeholder' },
+    pricingPage:   { candidates: ['#pricing-page-test-id'], status: 'placeholder' },
+    publishButton: { candidates: ['#publish-book-button-test-id'], status: 'placeholder' },
+    // AI-content question radios (Oct 2026 compliance) — patterns to verify live.
+    aiTextYes:  { candidates: ['input[name*="ai"][name*="text"][value="yes" i]'], status: 'placeholder' },
+    aiTextNo:   { candidates: ['input[name*="ai"][name*="text"][value="no" i]'], status: 'placeholder' },
+    aiImageYes: { candidates: ['input[name*="ai"][name*="image"][value="yes" i]'], status: 'placeholder' },
+    aiImageNo:  { candidates: ['input[name*="ai"][name*="image"][value="no" i]'], status: 'placeholder' },
+    aiTranslationsYes: { candidates: ['input[name*="ai"][name*="translat"][value="yes" i]'], status: 'placeholder' },
+    aiTranslationsNo:  { candidates: ['input[name*="ai"][name*="translat"][value="no" i]'], status: 'placeholder' },
+};
+
+const PLACEHOLDER_WARNED = new Set<string>();
+function warnIfPlaceholder(key: string, sendUpdate: UpdateSender): void {
+    if (SELECTORS[key]?.status === 'placeholder' && !PLACEHOLDER_WARNED.has(key)) {
+        PLACEHOLDER_WARNED.add(key);
+        sendUpdate({
+            type: 'log',
+            message: `⚠️ Selector "${key}" is UNVERIFIED (placeholder). If this step fails, verify it against the live KDP dashboard — see docs/KDP_SELECTOR_VERIFICATION.md.`,
+        });
+    }
+}
+
+/** Fill the first candidate selector that resolves; throws a descriptive error otherwise. */
+async function fillFirst(page: Page, key: string, value: string, sendUpdate: UpdateSender, timeout = 15000): Promise<void> {
+    warnIfPlaceholder(key, sendUpdate);
+    const { candidates } = SELECTORS[key];
+    for (const sel of candidates) {
+        try {
+            await page.waitForSelector(sel, { timeout: Math.min(timeout, 5000), state: 'visible' });
+            await page.fill(sel, value);
+            return;
+        } catch { /* try next candidate */ }
+    }
+    throw new Error(`Could not fill "${key}" — none of these matched: ${candidates.join(', ')}`);
+}
+
+/** Click the first candidate selector that resolves; throws a descriptive error otherwise. */
+async function clickFirst(page: Page, key: string, sendUpdate: UpdateSender, timeout = 15000): Promise<void> {
+    warnIfPlaceholder(key, sendUpdate);
+    const { candidates } = SELECTORS[key];
+    for (const sel of candidates) {
+        try {
+            await page.waitForSelector(sel, { timeout: Math.min(timeout, 5000), state: 'visible' });
+            await page.click(sel);
+            return;
+        } catch { /* try next candidate */ }
+    }
+    throw new Error(`Could not click "${key}" — none of these matched: ${candidates.join(', ')}`);
+}
+
+/** Set files on the first candidate file-input selector that resolves. */
+async function setFilesFirst(page: Page, key: string, filePath: string, sendUpdate: UpdateSender, timeout = 15000): Promise<void> {
+    warnIfPlaceholder(key, sendUpdate);
+    const { candidates } = SELECTORS[key];
+    for (const sel of candidates) {
+        try {
+            await page.waitForSelector(sel, { timeout: Math.min(timeout, 5000), state: 'attached' });
+            await page.setInputFiles(sel, filePath);
+            return;
+        } catch { /* try next candidate */ }
+    }
+    throw new Error(`Could not find file input "${key}" — none of these matched: ${candidates.join(', ')}`);
+}
+
+/** Wait for the first candidate selector that appears; throws a descriptive error otherwise. */
+async function waitForAny(page: Page, key: string, sendUpdate: UpdateSender, timeout = 300000): Promise<void> {
+    warnIfPlaceholder(key, sendUpdate);
+    const { candidates } = SELECTORS[key];
+    const errors: string[] = [];
+    for (const sel of candidates) {
+        try {
+            await page.waitForSelector(sel, { timeout: Math.min(timeout, 15000) });
+            return;
+        } catch (e) {
+            errors.push(sel);
+        }
+    }
+    throw new Error(`Timed out waiting for "${key}" — none of these appeared: ${errors.join(', ')}`);
+}
+
 
 export async function* runAutomation(
     payload: KdpAutomationPayload,
@@ -67,20 +171,22 @@ export async function* runAutomation(
         }
 
         sendUpdate({ type: 'log', message: 'Entering credentials...' });
-        await page.waitForSelector('input[type="email"]');
-        await page.fill('input[type="email"]', email);
-        await page.click('input[type="submit"]');
-        
-        await page.waitForSelector('input[type="password"]');
-        await page.fill('input[type="password"]', password);
-        await page.click('input[type="submit"]');
+        await fillFirst(page, 'loginEmail', email, sendUpdate);
+        await clickFirst(page, 'loginSubmit', sendUpdate);
+
+        await fillFirst(page, 'loginPassword', password, sendUpdate);
+        await clickFirst(page, 'loginSubmit', sendUpdate);
         sendUpdate({ type: 'log', message: 'Credentials submitted. Waiting for navigation...' });
 
         // Wait for either the bookshelf (success) or a CAPTCHA challenge
         await page.waitForNavigation({ waitUntil: 'networkidle' });
 
         // --- CAPTCHA HANDLING ---
-        const captchaElement = await page.$('#auth-captcha-image'); // Example selector
+        let captchaElement: Awaited<ReturnType<Page['$']>> = null;
+        for (const sel of SELECTORS.captchaImage.candidates) {
+            captchaElement = await page.$(sel);
+            if (captchaElement) break;
+        }
         if (captchaElement) {
             sendUpdate({ type: 'log', message: 'Security check detected. Taking screenshot...' });
             const captchaImageBuffer = await captchaElement.screenshot();
@@ -92,56 +198,72 @@ export async function* runAutomation(
             const solution = yield; 
             
             sendUpdate({ type: 'log', message: 'Submitting CAPTCHA solution...' });
-            await page.fill('#auth-captcha-guess', solution);
-            await page.click('button[type="submit"]'); // More specific selector
+            await fillFirst(page, 'captchaGuess', solution, sendUpdate, 10000);
+            await clickFirst(page, 'loginSubmit', sendUpdate, 10000);
             await page.waitForNavigation();
 
-            const errorBox = await page.$('#auth-error-message-box'); // Check if login failed
-            if(errorBox) {
+            let errorBox: Awaited<ReturnType<Page['$']>> = null;
+            for (const sel of SELECTORS.captchaError.candidates) {
+                errorBox = await page.$(sel);
+                if (errorBox) break;
+            }
+            if (errorBox) {
                 throw new Error("CAPTCHA solution was incorrect or login failed.");
             }
             sendUpdate({ type: 'log', message: 'CAPTCHA passed. Resuming operation.' });
         }
         
         sendUpdate({ type: 'log', message: 'Login successful. Navigating to bookshelf...' });
-        await page.waitForSelector('div[data-testid="bookshelf-page"]');
+        await waitForAny(page, 'bookshelf', sendUpdate, 60000);
 
 
         // --- FORM FILLING ---
         sendUpdate({ type: 'log', message: 'Creating new Kindle eBook...' });
-        await page.click('#create-button'); 
-        await page.click('div[data-testid="create-digital-book-button"]'); 
+        await clickFirst(page, 'createButton', sendUpdate);
+        await clickFirst(page, 'createEbook', sendUpdate);
 
         sendUpdate({ type: 'log', message: 'Waiting for book details page to load...' });
-        await page.waitForSelector('input[data-testid="book-title-input"]');
-        
+        await waitForAny(page, 'bookTitle', sendUpdate, 60000);
+
         sendUpdate({ type: 'log', message: 'Populating book details...' });
-        await page.fill('input[data-testid="book-title-input"]', payload.outline.title);
-        await page.fill('input[data-testid="book-subtitle-input"]', payload.outline.subtitle);
+        await fillFirst(page, 'bookTitle', payload.outline.title, sendUpdate);
+        await fillFirst(page, 'bookSubtitle', payload.outline.subtitle, sendUpdate);
         // ... fill other fields like author, description, keywords, categories
-        // These selectors need to be updated to match the real KDP dashboard.
-        // Example: await page.fill('#author-name', payload.authorProfile.name);
+        // Add their selectors to the SELECTORS registry above as you verify them.
 
         // --- AI CONTENT DISCLOSURE (Oct 2026 compliance) ---
         // KDP asks whether AI tools were used to GENERATE text, images, or translations.
         // The answers below come from the user's acknowledged disclosure in the Review step.
-        // NOTE: selectors must be verified against the live KDP dashboard — Amazon changes
-        // this flow. If the question cannot be answered automatically, the run MUST pause
-        // for manual input rather than submitting with a wrong or missing disclosure.
+        // The radio selectors are UNVERIFIED — see docs/KDP_SELECTOR_VERIFICATION.md.
+        // If the question block is found but cannot be answered, the run aborts rather
+        // than risk submitting with a wrong or missing disclosure.
         sendUpdate({ type: 'log', message: 'Answering KDP AI-content questions per acknowledged disclosure...' });
-        const aiAnswers = [
-            { label: 'text', value: disclosure.aiGeneratedText },
-            { label: 'images', value: disclosure.aiGeneratedImages },
-            { label: 'translations', value: disclosure.aiGeneratedTranslations },
+        const aiAnswers: Array<{ label: string; yesKey: string; noKey: string; value: boolean }> = [
+            { label: 'text', yesKey: 'aiTextYes', noKey: 'aiTextNo', value: disclosure.aiGeneratedText },
+            { label: 'images', yesKey: 'aiImageYes', noKey: 'aiImageNo', value: disclosure.aiGeneratedImages },
+            { label: 'translations', yesKey: 'aiTranslationsYes', noKey: 'aiTranslationsNo', value: disclosure.aiGeneratedTranslations },
         ];
+        let aiBlockFound = false;
         for (const a of aiAnswers) {
-            sendUpdate({ type: 'log', message: `  AI-generated ${a.label}: ${a.value ? 'YES — disclosing' : 'no'}` });
+            const key = a.value ? a.yesKey : a.noKey;
+            let answered = false;
+            for (const sel of SELECTORS[key].candidates) {
+                const radio = await page.$(sel);
+                if (radio) {
+                    aiBlockFound = true;
+                    await radio.check().catch(() => page.click(sel));
+                    answered = true;
+                    sendUpdate({ type: 'log', message: `  AI-generated ${a.label}: ${a.value ? 'YES — disclosed' : 'no'} (set via ${sel})` });
+                    break;
+                }
+            }
+            if (!answered) {
+                sendUpdate({ type: 'log', message: `  ⚠️ AI-generated ${a.label}: could not locate the radio — answer is "${a.value ? 'YES' : 'no'}", verify manually on the KDP form.` });
+            }
         }
-        // Best-effort pattern — VERIFY selectors against the live dashboard before use:
-        //   await page.check(`input[name="ai-content-text"][value="${disclosure.aiGeneratedText ? 'yes' : 'no'}"]`);
-        //   await page.check(`input[name="ai-content-images"][value="${disclosure.aiGeneratedImages ? 'yes' : 'no'}"]`);
-        //   await page.check(`input[name="ai-content-translations"][value="${disclosure.aiGeneratedTranslations ? 'yes' : 'no'}"]`);
-        sendUpdate({ type: 'log', message: 'AI disclosure answers recorded. Verify they are reflected on the KDP form before submitting.' });
+        if (!aiBlockFound) {
+            sendUpdate({ type: 'log', message: '⚠️ KDP AI-content question block not found with current selectors — disclosure answers logged above; confirm them on the form before the book goes live.' });
+        }
 
         // --- FILE UPLOAD ---
         sendUpdate({ type: 'status', status: 'uploading' });
@@ -156,16 +278,16 @@ export async function* runAutomation(
         await fs.writeFile(coverPath, coverBuffer);
         
         sendUpdate({ type: 'log', message: `Uploading manuscript...` });
-        await page.setInputFiles('#manuscript-upload-button-test-id', epubPath);
+        await setFilesFirst(page, 'manuscriptUpload', epubPath, sendUpdate);
         sendUpdate({ type: 'log', message: 'Manuscript sent. Waiting for KDP to process...' });
         // ROBUSTNESS: Wait for a specific success element to appear after upload.
-        await page.waitForSelector('#manuscript-upload-success-message', { timeout: 300000 }); // 5 min timeout
+        await waitForAny(page, 'manuscriptDone', sendUpdate, 300000); // 5 min timeout
         sendUpdate({ type: 'log', message: 'Manuscript processed successfully.' });
-        
+
         sendUpdate({ type: 'log', message: `Uploading cover image...` });
-        await page.setInputFiles('#cover-upload-button-test-id', coverPath);
+        await setFilesFirst(page, 'coverUpload', coverPath, sendUpdate);
         sendUpdate({ type: 'log', message: 'Cover sent. Waiting for KDP to process...' });
-        await page.waitForSelector('#cover-upload-success-message', { timeout: 180000 }); // 3 min timeout
+        await waitForAny(page, 'coverDone', sendUpdate, 180000); // 3 min timeout
         sendUpdate({ type: 'log', message: 'Cover processed successfully.' });
 
         sendUpdate({ type: 'log', message: 'File uploads complete.' });
@@ -173,17 +295,17 @@ export async function* runAutomation(
 
         // --- FINALIZATION ---
         sendUpdate({ type: 'log', message: 'Saving and continuing to pricing page...' });
-        await page.click('#save-and-continue-button-test-id');
-        await page.waitForSelector('#pricing-page-test-id'); // Wait for pricing page
+        await clickFirst(page, 'saveContinue', sendUpdate);
+        await waitForAny(page, 'pricingPage', sendUpdate, 120000); // Wait for pricing page
         sendUpdate({ type: 'log', message: 'Navigated to pricing page.' });
 
         sendUpdate({ type: 'log', message: 'Setting pricing and territory rights...' });
-        // ... fill pricing details
-        
+        // ... fill pricing details (add selectors to the registry as verified)
+
         sendUpdate({ type: 'log', message: 'Submitting book for publication review.' });
-        await page.click('#publish-book-button-test-id');
+        await clickFirst(page, 'publishButton', sendUpdate);
         await page.waitForNavigation();
-        
+
         sendUpdate({ type: 'success' });
 
     } catch (e) {
