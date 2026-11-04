@@ -75,13 +75,14 @@ We've automated the entire literary lifecycle—from the first spark of an idea 
 
 ### **1. AI Core: Google Gemini (Bring Your Own Key)**
 
-All AI generation in Null Library runs through the **Google Gemini API** with **your own API key** (`VITE_GOOGLE_API_KEY`, from Google AI Studio) — text, research, and images are all generated through your key.
+By default, AI generation in Null Library runs through the **Google Gemini API** with **your own API key** (`VITE_GOOGLE_API_KEY`, from Google AI Studio). Chapter writing can alternatively be routed through a local gateway you run yourself — see *Optional local gateways* below.
 
 * **Text & research** — `gemini-2.5-flash` powers market reports, outlines, chapters, and marketing copy via `services/geminiService.ts`.
 * **Literary critique** — the Critic Agent uses `gemini-3-pro-preview` for its deeper read, then rewrites against its own notes.
 * **Images** — `gemini-2.5-flash-image` generates covers and chapter illustrations.
 * **Local embeddings (no key, no cloud)** — RAG continuity checks run `Xenova/all-MiniLM-L6-v2` in your browser via `@xenova/transformers`. This is the one piece that works with no API key at all, because it runs on your machine.
 * **Optional bring-your-own extras** — Tavily (live web research), ElevenLabs, and OpenAI TTS each work only with your own key for that service, and are skipped cleanly without one.
+* **Optional local gateways** — chapter writing (batch, streaming, and the humanize pass) can run through a self-hosted gateway instead of Gemini direct: [FreeLLMAPI](https://github.com/tashfeenahmed/freellmapi) stacks providers' published free tiers behind one endpoint with per-key quota tracking and rate-limit failover, and [Portkey Gateway](https://github.com/Portkey-AI/gateway) adds routing, fallbacks, and caching across providers. Choose one in the app's footer **Gateway Routing** settings; structured stages (outlines, market research, marketing) always stay on Gemini, and any gateway failure falls back to Gemini automatically. Docker sidecars: `gateways/` · guide: `docs/GATEWAYS.md`.
 
 ---
 

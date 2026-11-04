@@ -29,6 +29,8 @@ import desktopBridge from './services/desktopBridge';
 
 import { useAutoSave } from './hooks/useAutoSave';
 import AutoSaveIndicator from './components/shared/AutoSaveIndicator';
+import { GatewaySettingsPanel } from './components/shared/GatewaySettingsPanel';
+import { GatewayConfig, getPreset, loadGatewayConfig, saveGatewayConfig } from './services/gatewayService';
 
 const pageRangeToChapterCount = (pageRange: string): number => {
     const firstNum = parseInt(pageRange.split('-')[0], 10);
@@ -90,6 +92,8 @@ function App() {
 
   // NEW: Live token counter
   const [totalTokens, setTotalTokens] = useState(0);
+  const [gatewayConfig, setGatewayConfig] = useState<GatewayConfig>(() => loadGatewayConfig());
+  const [isGatewayPanelOpen, setIsGatewayPanelOpen] = useState(false);
   useEffect(() => {
     const interval = setInterval(() => setTotalTokens(getTotalEstimatedTokens()), 5000);
     return () => clearInterval(interval);
@@ -1115,7 +1119,7 @@ function App() {
   }
 
   return (
-    <div className="pt-8 min-h-screen flex flex-col bg-slate-900 text-slate-200 font-sans selection:bg-indigo-500 selection:text-white">
+    <div className="relative pt-8 min-h-screen flex flex-col bg-slate-900 text-slate-200 font-sans selection:bg-indigo-500 selection:text-white">
       <TitleBar onSave={handleSaveProject} onLoad={handleLoadProject} />
       
       {/* Header */}
@@ -1274,9 +1278,25 @@ function App() {
              {totalTokens > 0 && (
                <span className="text-slate-600">~{totalTokens.toLocaleString()} tokens</span>
              )}
+             <button
+               type="button"
+               data-gateway-pill
+               onClick={() => setIsGatewayPanelOpen(open => !open)}
+               className="rounded-full border border-slate-700 bg-slate-900/80 px-2.5 py-1 text-[11px] font-medium text-slate-300 transition hover:border-cyan-500/60 hover:text-cyan-200"
+               title="Gateway routing settings"
+             >
+               {gatewayConfig.preset === 'gemini-direct' ? '✦ Gemini Direct' : `⚡ ${getPreset(gatewayConfig.preset).shortLabel}`}
+             </button>
              <span>App v1.5.0</span>
         </div>
       </div>
+      {isGatewayPanelOpen && (
+        <GatewaySettingsPanel
+          config={gatewayConfig}
+          onConfigChange={(next) => { setGatewayConfig(next); saveGatewayConfig(next); }}
+          onClose={() => setIsGatewayPanelOpen(false)}
+        />
+      )}
     </div>
   );
 }

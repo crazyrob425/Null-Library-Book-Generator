@@ -13,6 +13,7 @@ import {
   marketReportCache,
   shortCache,
 } from './tokenOptimizer';
+import { isGatewayActive, generateTextViaGateway, generateTextStreamViaGateway } from './gatewayService';
 
 
 let aiInstance: GoogleGenAI | null = null;
@@ -237,6 +238,15 @@ export const generateChapterContent = async (chapterTitle: string, chapterSummar
   Do not include the chapter title at the start.`);
   recordTokenUsage('generateChapterContent', prompt);
 
+  if (isGatewayActive()) {
+    try {
+      console.log('[Gateway] Routing chapter generation through the configured gateway.');
+      return await generateTextViaGateway(prompt);
+    } catch (gatewayError) {
+      console.warn('[Gateway] Chapter generation failed — falling back to Gemini:', gatewayError);
+    }
+  }
+
   const response = await callWithRetry<GenerateContentResponse>(() => getAi().models.generateContent({
     model: 'gemini-2.5-flash',
     contents: prompt
@@ -342,6 +352,15 @@ export const humanizeChapterContent = async (content: string): Promise<string> =
     Text:
     ${excerpt}`);
     recordTokenUsage('humanizeChapterContent', prompt);
+
+  if (isGatewayActive()) {
+    try {
+      console.log('[Gateway] Routing humanize pass through the configured gateway.');
+      return await generateTextViaGateway(prompt);
+    } catch (gatewayError) {
+      console.warn('[Gateway] Humanize failed — falling back to Gemini:', gatewayError);
+    }
+  }
     
     const response = await callWithRetry<GenerateContentResponse>(() => getAi().models.generateContent({
         model: 'gemini-2.5-flash',
@@ -705,6 +724,15 @@ Style: ${genreNote}
 Format: Markdown. Do not include the chapter title at the start.${contextBlock}`);
 
     recordTokenUsage('generateChapterContentStream', prompt);
+
+    if (isGatewayActive()) {
+      try {
+        console.log('[Gateway] Routing streamed chapter generation through the configured gateway.');
+        return await generateTextStreamViaGateway(prompt, onChunk);
+      } catch (gatewayError) {
+        console.warn('[Gateway] Streaming failed — falling back to Gemini:', gatewayError);
+      }
+    }
 
     let accumulated = '';
     const streamResult = await getAi().models.generateContentStream({

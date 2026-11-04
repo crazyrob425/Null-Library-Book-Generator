@@ -1,0 +1,46 @@
+# Optional self-hosted AI gateways for Null Library.
+#
+# These are independent open-source projects, run as sidecar services —
+# Null Library only ever talks to them over their OpenAI-compatible /v1
+# APIs. Provider keys are entered in each gateway's own dashboard and
+# stored by the gateway; nothing in this file contains secrets.
+#
+# Start one (or both):
+#   docker compose up -d freellmapi
+#   docker compose up -d portkey
+# Stop:
+#   docker compose down
+#
+# Then open Null Library's footer → Gateway Routing, pick the gateway,
+# paste its key, set a model id, and hit Test Connection.
+# Full guide: docs/GATEWAYS.md
+
+services:
+  # FreeLLMAPI — stacks the published free tiers of dozens of providers
+  # behind one endpoint, with per-key quota tracking and rate-limit
+  # failover. Dashboard: http://localhost:3001  API: http://localhost:3001/v1
+  # Project: https://github.com/tashfeenahmed/freellmapi (MIT)
+  freellmapi:
+    image: ghcr.io/tashfeenahmed/freellmapi:latest
+    container_name: null-library-freellmapi
+    ports:
+      - "3001:3001"
+    volumes:
+      - freellmapi-data:/data
+    restart: unless-stopped
+
+  # Portkey Gateway — general-purpose routing gateway with fallbacks,
+  # caching, and guardrails. Console: http://localhost:8787/public/
+  # API: http://localhost:8787/v1
+  # Project: https://github.com/Portkey-AI/gateway (MIT)
+  # If the image pull ever fails, the gateway also runs without Docker:
+  #   npx @portkey-ai/gateway
+  portkey:
+    image: portkeyai/gateway:latest
+    container_name: null-library-portkey
+    ports:
+      - "8787:8787"
+    restart: unless-stopped
+
+volumes:
+  freellmapi-data:
