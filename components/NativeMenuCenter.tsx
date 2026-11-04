@@ -1,11 +1,10 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import desktopBridge from '../services/desktopBridge';
 import { DesktopPreferences, SecretDescriptor } from '../types';
 
 export type NativeMenuPanel =
   | 'accounts'
   | 'preferences'
-  | 'ai-proxy'
   | 'clipboard'
   | 'authorship'
   | null;
@@ -22,12 +21,6 @@ const defaultPreferences: DesktopPreferences = {
     saved_books_dir: '',
     drafts_dir: '',
     favorite_printer: '',
-  },
-  ai_routing: {
-    mode: 'auto-route',
-    routing_enabled: true,
-    latency_diagnostics_enabled: false,
-    shared_api_key_potluck_enabled: false,
   },
   safety: {
     censorship_enabled: true,
@@ -58,7 +51,6 @@ const NativeMenuCenter: React.FC<NativeMenuCenterProps> = ({ panel, onClose }) =
   const [secretValue, setSecretValue] = useState('');
   const [status, setStatus] = useState<string | null>(null);
 
-  const oauthProviders = useMemo(() => ['gemini-cli', 'antigravity', 'claude', 'kilo'], []);
 
   useEffect(() => {
     if (!panel) return;
@@ -137,25 +129,6 @@ const NativeMenuCenter: React.FC<NativeMenuCenterProps> = ({ panel, onClose }) =
     }
   };
 
-  const startOAuth = async (provider: string) => {
-    try {
-      const providerKey = provider.replace(/-/g, '_');
-      const clientIdSecretKey = `oauth.${providerKey}.client_id`;
-      const clientId = await desktopBridge.getSecureSecret(clientIdSecretKey);
-      if (!clientId) {
-        setStatus(`Missing OAuth client ID. Save "${clientIdSecretKey}" in Account Manager first.`);
-        return;
-      }
-      const redirectUri = 'http://localhost:1420/oauth/callback';
-      const url = await desktopBridge.startProviderOAuth(provider, clientId, redirectUri);
-      window.open(url, `${provider}-oauth`, 'width=960,height=720');
-      setStatus(`Opened OAuth popup for ${provider}.`);
-    } catch (error) {
-      console.error(error);
-      setStatus(`Failed to start OAuth for ${provider}.`);
-    }
-  };
-
   return (
     <div className="fixed inset-0 z-[120] bg-black/60 flex items-center justify-center p-4">
       <div className="w-full max-w-4xl rounded-xl border border-slate-700 bg-slate-900 shadow-2xl">
@@ -163,7 +136,6 @@ const NativeMenuCenter: React.FC<NativeMenuCenterProps> = ({ panel, onClose }) =
           <h2 className="text-lg font-semibold text-slate-100">
             {panel === 'accounts' && 'Account Manager'}
             {panel === 'preferences' && 'Preferences'}
-            {panel === 'ai-proxy' && 'AI Proxy Dashboard'}
             {panel === 'clipboard' && 'Multi-Clipboard Settings'}
             {panel === 'authorship' && 'Authorship Defaults'}
           </h2>
@@ -219,26 +191,7 @@ const NativeMenuCenter: React.FC<NativeMenuCenterProps> = ({ panel, onClose }) =
             </section>
           )}
 
-          {panel === 'ai-proxy' && (
-            <section className="space-y-3">
-              <p className="text-sm text-slate-300">
-                Configure provider routing, latency checks, and OAuth connectors for approved providers.
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {oauthProviders.map((provider) => (
-                  <button
-                    key={provider}
-                    onClick={() => startOAuth(provider)}
-                    className="rounded border border-slate-600 bg-slate-800 px-3 py-1.5 text-sm text-slate-100 hover:bg-slate-700"
-                  >
-                    Connect {provider}
-                  </button>
-                ))}
-              </div>
-            </section>
-          )}
-
-          {(panel === 'preferences' || panel === 'clipboard' || panel === 'authorship' || panel === 'ai-proxy') && (
+          {(panel === 'preferences' || panel === 'clipboard' || panel === 'authorship') && (
             <section className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <label className="flex flex-col gap-1">
@@ -268,25 +221,6 @@ const NativeMenuCenter: React.FC<NativeMenuCenterProps> = ({ panel, onClose }) =
                     }
                     className="rounded border border-slate-700 bg-slate-800 px-2 py-2 text-slate-100"
                   />
-                </label>
-                <label className="flex flex-col gap-1">
-                  <span className="text-xs text-slate-400">AI Routing Mode</span>
-                  <select
-                    value={preferences.ai_routing.mode}
-                    onChange={(e) =>
-                      setPreferences((state) => ({
-                        ...state,
-                        ai_routing: {
-                          ...state.ai_routing,
-                          mode: e.target.value as 'auto-route' | 'manual-selection',
-                        },
-                      }))
-                    }
-                    className="rounded border border-slate-700 bg-slate-800 px-2 py-2 text-slate-100"
-                  >
-                    <option value="auto-route">Auto-Route</option>
-                    <option value="manual-selection">Manual Selection</option>
-                  </select>
                 </label>
                 <label className="flex flex-col gap-1">
                   <span className="text-xs text-slate-400">AI Personality</span>

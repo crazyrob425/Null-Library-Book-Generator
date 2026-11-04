@@ -1,12 +1,10 @@
 use keyring::Entry;
-use rand::{distributions::Alphanumeric, rngs::OsRng, Rng};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
 use tauri::{Emitter, Manager};
-use url::Url;
 
 const SECRET_SERVICE: &str = "com.fraudrob.kdpebookgenerator";
 const SETTINGS_FILE: &str = "desktop-menu-settings.json";
@@ -39,26 +37,6 @@ impl Default for GeneralPreferences {
             saved_books_dir: String::new(),
             drafts_dir: String::new(),
             favorite_printer: String::new(),
-        }
-    }
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(default)]
-struct AiRoutingPreferences {
-    mode: String,
-    routing_enabled: bool,
-    latency_diagnostics_enabled: bool,
-    shared_api_key_potluck_enabled: bool,
-}
-
-impl Default for AiRoutingPreferences {
-    fn default() -> Self {
-        Self {
-            mode: "auto-route".to_string(),
-            routing_enabled: true,
-            latency_diagnostics_enabled: false,
-            shared_api_key_potluck_enabled: false,
         }
     }
 }
@@ -139,7 +117,6 @@ impl Default for CloudSyncPreferences {
 #[serde(default)]
 struct DesktopPreferences {
     general: GeneralPreferences,
-    ai_routing: AiRoutingPreferences,
     safety: SafetyPreferences,
     clipboard: ClipboardPreferences,
     authorship: AuthorshipPreferences,
@@ -162,13 +139,6 @@ struct SecretIndex {
 #[derive(Clone, Serialize)]
 struct MenuActionPayload {
     id: String,
-}
-
-#[derive(Clone, Serialize)]
-struct OAuthLaunchPayload {
-    provider: String,
-    url: String,
-    state: String,
 }
 
 fn config_dir<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Result<PathBuf, String> {
@@ -265,46 +235,6 @@ fn default_secret_descriptors() -> Vec<SecretDescriptor> {
             category: "api-keys".to_string(),
         },
         SecretDescriptor {
-            key: "oauth.gemini_cli".to_string(),
-            label: "Gemini CLI OAuth Token".to_string(),
-            category: "oauth".to_string(),
-        },
-        SecretDescriptor {
-            key: "oauth.gemini_cli.client_id".to_string(),
-            label: "Gemini CLI OAuth Client ID".to_string(),
-            category: "oauth-config".to_string(),
-        },
-        SecretDescriptor {
-            key: "oauth.antigravity".to_string(),
-            label: "Antigravity OAuth Token".to_string(),
-            category: "oauth".to_string(),
-        },
-        SecretDescriptor {
-            key: "oauth.antigravity.client_id".to_string(),
-            label: "Antigravity OAuth Client ID".to_string(),
-            category: "oauth-config".to_string(),
-        },
-        SecretDescriptor {
-            key: "oauth.claude".to_string(),
-            label: "Claude OAuth Token".to_string(),
-            category: "oauth".to_string(),
-        },
-        SecretDescriptor {
-            key: "oauth.claude.client_id".to_string(),
-            label: "Claude OAuth Client ID".to_string(),
-            category: "oauth-config".to_string(),
-        },
-        SecretDescriptor {
-            key: "oauth.kilo".to_string(),
-            label: "Kilo OAuth Token".to_string(),
-            category: "oauth".to_string(),
-        },
-        SecretDescriptor {
-            key: "oauth.kilo.client_id".to_string(),
-            label: "Kilo OAuth Client ID".to_string(),
-            category: "oauth-config".to_string(),
-        },
-        SecretDescriptor {
             key: "cloud.google.drive".to_string(),
             label: "Google Drive Backup Access Token".to_string(),
             category: "cloud-sync".to_string(),
@@ -357,19 +287,11 @@ fn build_native_menu<R: tauri::Runtime>(
         )
         .build()?;
 
-    let ai_proxy_menu = SubmenuBuilder::new(app, "AI Proxy")
-        .text("edit_ai_proxy_toggle_routing", "Toggle Routing")
-        .text("edit_ai_proxy_latency", "Inspect Latency")
-        .text("edit_ai_proxy_potluck", "Shared API Key Community Potluck")
-        .text("edit_ai_proxy_oauth_dashboard", "OAuth Provider Dashboard")
-        .build()?;
-
     let edit_menu = SubmenuBuilder::new(app, "Edit")
         .text("edit_undo", "Undo")
         .text("edit_redo", "Redo")
         .separator()
         .item(&clipboard_menu)
-        .item(&ai_proxy_menu)
         .separator()
         .text("edit_preferences", "Preferences")
         .build()?;
@@ -531,7 +453,6 @@ fn get_menu_blueprint() -> HashMap<String, Vec<String>> {
                 "undo".to_string(),
                 "redo".to_string(),
                 "multi_clipboard".to_string(),
-                "ai_proxy_dashboard".to_string(),
                 "preferences".to_string(),
             ],
         ),
@@ -540,60 +461,6 @@ fn get_menu_blueprint() -> HashMap<String, Vec<String>> {
             vec!["defaults".to_string(), "auto_publish".to_string()],
         ),
     ])
-}
-
-#[tauri::command]
-fn start_provider_oauth(
-    app: tauri::AppHandle,
-    provider: String,
-    client_id: String,
-    redirect_uri: String,
-) -> Result<String, String> {
-    if client_id.trim().is_empty() {
-        return Err("OAuth client_id is required.".to_string());
-    }
-    if redirect_uri.trim().is_empty() {
-        return Err("OAuth redirect_uri is required.".to_string());
-    }
-
-    let provider_norm = provider.to_lowercase();
-    let auth_base = match provider_norm.as_str() {
-        "gemini-cli" => "https://accounts.google.com/o/oauth2/v2/auth",
-        "antigravity" => "https://auth.antigravity.ai/oauth/authorize",
-        "claude" => "https://claude.ai/oauth/authorize",
-        "kilo" => {
-            return Err(
-                "Kilo OAuth endpoint is not configured yet. Add a valid production URL before enabling."
-                    .to_string(),
-            )
-        }
-        _ => return Err("Unsupported OAuth provider.".to_string()),
-    };
-
-    let state: String = OsRng
-        .sample_iter(&Alphanumeric)
-        .take(48)
-        .map(char::from)
-        .collect();
-
-    let mut auth_url = Url::parse(auth_base).map_err(|e| format!("Invalid OAuth URL: {e}"))?;
-    auth_url
-        .query_pairs_mut()
-        .append_pair("response_type", "code")
-        .append_pair("client_id", client_id.trim())
-        .append_pair("redirect_uri", redirect_uri.trim())
-        .append_pair("scope", "openid profile email")
-        .append_pair("state", &state);
-
-    let auth_url_string = auth_url.to_string();
-    let payload = OAuthLaunchPayload {
-        provider: provider_norm,
-        url: auth_url_string.clone(),
-        state,
-    };
-    app.emit("oauth-launch-requested", payload)
-        .map_err(|e| format!("Could not emit OAuth launch request: {e}"))?;
-    Ok(auth_url_string)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -634,7 +501,6 @@ pub fn run() {
             get_secure_secret,
             delete_secure_secret,
             get_menu_blueprint,
-            start_provider_oauth
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

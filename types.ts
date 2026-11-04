@@ -210,13 +210,6 @@ export interface GeneralPreferences {
   favorite_printer: string;
 }
 
-export interface AiRoutingPreferences {
-  mode: 'auto-route' | 'manual-selection';
-  routing_enabled: boolean;
-  latency_diagnostics_enabled: boolean;
-  shared_api_key_potluck_enabled: boolean;
-}
-
 export interface SafetyPreferences {
   censorship_enabled: boolean;
   ai_personality: string;
@@ -243,7 +236,6 @@ export interface CloudSyncPreferences {
 
 export interface DesktopPreferences {
   general: GeneralPreferences;
-  ai_routing: AiRoutingPreferences;
   safety: SafetyPreferences;
   clipboard: ClipboardPreferences;
   authorship: AuthorshipPreferences;

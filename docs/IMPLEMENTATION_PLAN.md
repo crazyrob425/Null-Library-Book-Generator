@@ -17,7 +17,7 @@
 
 - **Frontend shell:** Step-driven React + TypeScript workflow in `App.tsx`.
 - **Domain contracts:** Shared interfaces and enums in `types.ts`.
-- **AI layer:** `services/geminiService.ts` + multi-provider router in `services/aiProvider.ts` + token/caching helpers in `services/tokenOptimizer.ts`.
+- **AI layer:** `services/geminiService.ts` (Google Gemini, user's own API key) + token/caching helpers in `services/tokenOptimizer.ts`.
 - **RAG layer:** `services/ragService.ts` — Xenova embeddings vector store + Book Bible extraction.
 - **Persistence:** IndexedDB wrapper in `services/storageService.ts` and periodic autosave behavior in `hooks/useAutoSave.ts`.
 - **Desktop integration (Electron):** Bridge via `electron/preload.ts` and `electron/main.ts`.
@@ -39,8 +39,6 @@
 |---|---|---|
 | `VITE_GOOGLE_API_KEY` | Yes | Google Gemini AI generation |
 | `VITE_TAVILY_API_KEY` | No | Live web research via Tavily |
-| `VITE_OPENAI_BASE_URL` | No | OpenAI-compatible local/remote LLM |
-| `VITE_OPENAI_API_KEY` | No | Auth for OpenAI-compatible endpoint |
 | `KDP_EMAIL` | Automation only | Amazon KDP login |
 | `KDP_PASSWORD` | Automation only | Amazon KDP login |
 
@@ -59,8 +57,8 @@
 - [x] **BUG-01** — `ragService.ts`: Embedder singleton race condition fixed (promise-lock).
 - [x] **BUG-02** — `ragService.ts`: Redundant dynamic import removed.
 - [x] **BUG-03** — `App.tsx`: `bookBible`/`bookGenre`/`researchContext` now round-trip through save/load.
-- [x] **BUG-04** — `aiProvider.ts` + `realMarketService.ts`: All `fetch` calls now have timeouts.
-- [x] **BUG-05** — `ProviderSettingsPanel.tsx`: Panel auto-dismisses on outside click.
+- [x] **BUG-04** — `aiProvider.ts` (removed 2026-11-04 with the dead provider layer) + `realMarketService.ts`: All `fetch` calls now have timeouts.
+- [x] **BUG-05** — `ProviderSettingsPanel.tsx` (removed 2026-11-04 with the dead provider layer): Panel auto-dismisses on outside click.
 - [x] **BUG-06 (Critical)** — `ExpansionHub.tsx`: Duplicate old component removed; new tab-based UI is now actually rendered.
 - [x] **BUG-07** — `App.tsx`: Sequential humanization branch now actually runs sequentially.
 - [x] **BUG-08** — `geminiService.ts`: Guard added for empty `tableOfContents` in outline improvement pass.

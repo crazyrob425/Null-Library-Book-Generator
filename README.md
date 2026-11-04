@@ -16,7 +16,7 @@
 
 [![React](https://img.shields.io/badge/React-19-00D8FF?style=for-the-badge&logo=react&logoColor=black)](https://reactjs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.8-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![Multi-AI](https://img.shields.io/badge/Multi--AI-GPT4o%20%7C%20Claude%20%7C%20Gemini-FF6F00?style=for-the-badge&logo=openai&logoColor=white)](#the-proxy-proxy-gateway-multi-ai-spoofing)
+[![AI Core](https://img.shields.io/badge/AI%20Core-Google%20Gemini-FF6F00?style=for-the-badge&logo=google&logoColor=white)](#1-ai-core-google-gemini-bring-your-own-key)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind-3.0-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
 [![Blacklisted Binary Labs](https://img.shields.io/badge/Blacklisted%20Binary%20Labs-⚡-black?style=for-the-badge)](#credits)
@@ -44,7 +44,7 @@ We've automated the entire literary lifecycle—from the first spark of an idea 
 ## 📋 **TABLE OF CONTENTS**
 
 - [🔫 The "Unfair Advantage" Feature Set](#-the-unfair-advantage-feature-set)
-  - [1. The Proxy-Proxy Gateway (Multi-AI Spoofing)](#1-the-proxy-proxy-gateway-multi-ai-spoofing)
+  - [1. AI Core: Google Gemini (Bring Your Own Key)](#1-ai-core-google-gemini-bring-your-own-key)
   - [2. Specialized "Work-Horse" Swarms](#2-specialized-work-horse-swarms)
   - [3. Intelligent Market Reconnaissance](#3-intelligent-market-reconnaissance)
   - [4. The Manuscript Forge](#4-the-manuscript-forge)
@@ -73,19 +73,15 @@ We've automated the entire literary lifecycle—from the first spark of an idea 
 
 ---
 
-### **1. The Proxy-Proxy Gateway (Multi-AI Spoofing)**
+### **1. AI Core: Google Gemini (Bring Your Own Key)**
 
-<div align="center">
+All AI generation in Null Library runs through the **Google Gemini API** with **your own API key** (`VITE_GOOGLE_API_KEY`, from Google AI Studio) — text, research, and images are all generated through your key.
 
-<img src="chart.png" alt="Null Library" width="400">
-
-</div>
-
-Why settle for one model when you can commit **"API Identity Theft"**? Our custom **LLM Proxy Spoof** access gives you unlimited, high-speed routing to the world's elite AI models—**completely free**.
-
-* 🔄 **Intelligent Model Routing** — We rotate **Claude 3.5** for the flowery prose and emotionally devastating dialogue, **GPT-4o/o1** for complex logical structure and plot architecture, and **Gemini 3.0** for the heavy-lifting research and data synthesis.
-* 🧠 **Task-Matched AI Selection** — Each phase of book creation is automatically assigned to the AI model that does it best. Outlines go to the strategist. Prose goes to the poet. Fact-checking goes to the forensic accountant.
-* ♾️ **Unlimited Multi-AI Access** — No API keys? No problem. Our OpenAI-compatible proxy gateway connects to local models (Ollama, GPT4All) and cloud endpoints seamlessly. It's like having a room full of brilliant ghosts writing for you. Unlike human interns, they don't complain about "labor laws" or "needing to sleep."
+* **Text & research** — `gemini-2.5-flash` powers market reports, outlines, chapters, and marketing copy via `services/geminiService.ts`.
+* **Literary critique** — the Critic Agent uses `gemini-3-pro-preview` for its deeper read, then rewrites against its own notes.
+* **Images** — `gemini-2.5-flash-image` generates covers and chapter illustrations.
+* **Local embeddings (no key, no cloud)** — RAG continuity checks run `Xenova/all-MiniLM-L6-v2` in your browser via `@xenova/transformers`. This is the one piece that works with no API key at all, because it runs on your machine.
+* **Optional bring-your-own extras** — Tavily (live web research), ElevenLabs, and OpenAI TTS each work only with your own key for that service, and are skipped cleanly without one.
 
 ---
 
@@ -418,10 +414,10 @@ graph LR
 | Layer | Technology |
 |---|---|
 | **Frontend** | React 19, TypeScript 5.8, Tailwind CSS |
-| **AI Core** | Google GenAI SDK (Gemini 2.5 Flash / 3.0 Pro), OpenAI-Compatible Proxy |
+| **AI Core** | Google GenAI SDK (Gemini 2.5 Flash / 3.0 Pro) — user's own API key |
 | **NLP Suite** | 15 integrated libraries (sentiment, readability, grammar, etc.) |
 | **RAG Engine** | Xenova Transformers (all-MiniLM-L6-v2), In-Memory Vector Store |
-| **Graphics** | FabricJS (Canvas), Pollinations.ai (Image Generation) |
+| **Graphics** | FabricJS (Canvas), Gemini Image Generation |
 | **Audio** | ElevenLabs API, OpenAI TTS |
 | **Export** | JSZip, epub-gen-memory, jsPDF, DOCX |
 | **Automation** | Playwright (KDP Bot), WebSocket Backend |

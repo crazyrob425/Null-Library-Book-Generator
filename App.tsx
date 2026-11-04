@@ -4,10 +4,8 @@ import { AppStep, BookOutline, Chapter, MarketReport, AuthorProfile, GenreSugges
 import * as geminiService from './services/geminiService';
 import * as realMarketService from './services/realMarketService';
 import * as storageService from './services/storageService';
-import { loadProviderConfig, AIProviderConfig } from './services/aiProvider';
 import { getTotalEstimatedTokens } from './services/tokenOptimizer';
 import { extractBibleEntries, embedChapter, clearVectorStore } from './services/ragService';
-import ProviderSettingsPanel from './components/shared/ProviderSettingsPanel';
 
 import StepIndicator from './components/shared/StepIndicator';
 import PipelineTracker from './components/PipelineTracker';
@@ -97,9 +95,6 @@ function App() {
     return () => clearInterval(interval);
   }, []);
 
-  // NEW: AI Provider config
-  const [providerConfig, setProviderConfig] = useState<AIProviderConfig>(() => loadProviderConfig());
-  const [isProviderPanelOpen, setIsProviderPanelOpen] = useState(false);
   const [nativeMenuPanel, setNativeMenuPanel] = useState<NativeMenuPanel>(null);
 
   // --- AUTO SAVE ---
@@ -1001,12 +996,6 @@ function App() {
         case 'edit_preferences':
           setNativeMenuPanel('preferences');
           break;
-        case 'edit_ai_proxy_toggle_routing':
-        case 'edit_ai_proxy_latency':
-        case 'edit_ai_proxy_potluck':
-        case 'edit_ai_proxy_oauth_dashboard':
-          setNativeMenuPanel('ai-proxy');
-          break;
         case 'edit_clipboard_copy':
         case 'edit_clipboard_paste':
         case 'edit_clipboard_find':
@@ -1285,23 +1274,6 @@ function App() {
              {totalTokens > 0 && (
                <span className="text-slate-600">~{totalTokens.toLocaleString()} tokens</span>
              )}
-             {/* AI Provider pill */}
-             <div className="relative">
-               <button
-                 onClick={() => setIsProviderPanelOpen(v => !v)}
-                 className="flex items-center gap-1 px-2 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700 hover:border-violet-600 hover:text-violet-400 transition-colors"
-                 title="Switch AI provider"
-               >
-                 {providerConfig.type === 'gemini' ? 'Gemini ✦' : `${providerConfig.openaiModel || 'Custom'} ⚡`} ▾
-               </button>
-               {isProviderPanelOpen && (
-                 <ProviderSettingsPanel
-                   config={providerConfig}
-                   onConfigChange={setProviderConfig}
-                   onClose={() => setIsProviderPanelOpen(false)}
-                 />
-               )}
-             </div>
              <span>App v1.5.0</span>
         </div>
       </div>

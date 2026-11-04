@@ -45,7 +45,7 @@ The web build is a pure static site. It runs entirely in the browser — no serv
 2. Vercel auto-detects Vite. Leave build command (`npm run build`) and output dir (`dist`) as-is.
 3. Under **Environment Variables**, add:
    - `VITE_GOOGLE_API_KEY` = your new Gemini API key
-   - (Optionally) `VITE_TAVILY_API_KEY`, `VITE_OPENAI_BASE_URL`, `VITE_OPENAI_API_KEY`
+   - (Optionally) `VITE_TAVILY_API_KEY`
 4. Click **Deploy**. Every push to `main` auto-redeploys.
 
 ### Steps (GitHub Pages)

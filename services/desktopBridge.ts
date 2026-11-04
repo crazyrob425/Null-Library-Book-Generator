@@ -37,7 +37,6 @@ export interface DesktopBridge {
   setSecureSecret: (descriptor: SecretDescriptor, value: string) => Promise<void>;
   getSecureSecret: (secretKey: string) => Promise<string | null>;
   deleteSecureSecret: (secretKey: string) => Promise<void>;
-  startProviderOAuth: (provider: string, clientId: string, redirectUri: string) => Promise<string>;
 }
 
 const isElectron = () => typeof window !== 'undefined' && !!window.electronAPI;
@@ -72,12 +71,6 @@ const browserBridge: DesktopBridge = {
       drafts_dir: '',
       favorite_printer: '',
     },
-    ai_routing: {
-      mode: 'auto-route',
-      routing_enabled: true,
-      latency_diagnostics_enabled: false,
-      shared_api_key_potluck_enabled: false,
-    },
     safety: {
       censorship_enabled: true,
       ai_personality: 'balanced',
@@ -104,7 +97,6 @@ const browserBridge: DesktopBridge = {
   setSecureSecret: async () => {},
   getSecureSecret: async () => null,
   deleteSecureSecret: async () => {},
-  startProviderOAuth: async (_provider, _clientId, _redirectUri) => '',
 };
 
 const electronBridge: DesktopBridge = {
@@ -130,7 +122,6 @@ const electronBridge: DesktopBridge = {
   setSecureSecret: async () => {},
   getSecureSecret: async () => null,
   deleteSecureSecret: async () => {},
-  startProviderOAuth: async (_provider, _clientId, _redirectUri) => '',
 };
 
 const tauriBridge: DesktopBridge = {
@@ -225,8 +216,6 @@ const tauriBridge: DesktopBridge = {
   deleteSecureSecret: async (secretKey) => {
     await invoke('delete_secure_secret', { secretKey });
   },
-  startProviderOAuth: async (provider, clientId, redirectUri) =>
-    invoke<string>('start_provider_oauth', { provider, client_id: clientId, redirect_uri: redirectUri }),
 };
 
 const desktopBridge: DesktopBridge = isElectron() ? electronBridge : isTauri() ? tauriBridge : browserBridge;
