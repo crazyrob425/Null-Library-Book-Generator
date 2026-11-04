@@ -57,6 +57,10 @@
         "sidebarImage": "installer-assets/nsis-sidebar.bmp",
         "installerHooks": "installer/nsis-hooks.nsh"
       }
-    }
+    },
+    "resources": [
+      "../gateways/supervisor.mjs",
+      "../gateways/docker-compose.yml"
+    ]
   }
 }

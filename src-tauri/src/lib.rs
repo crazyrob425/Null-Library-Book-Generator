@@ -343,6 +343,105 @@ fn write_file(path: String, data: String) -> Result<(), String> {
     fs::write(path, data).map_err(|e| e.to_string())
 }
 
+// ---------------------------------------------------------------------------
+// Gateway supervisor lifecycle (gateways/supervisor.mjs)
+//
+// The renderer never gets a shell. This command exposes exactly three
+// allowlisted actions against one known script: start / stop / status.
+// Seed keys (the provider keys the app already holds) travel to the
+// supervisor through its environment only — never argv, never disk in
+// the repo — and the supervisor uses them to pre-load FreeLLMAPI's
+// declarative startup config.
+// ---------------------------------------------------------------------------
+
+fn gateway_data_dir(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
+    let dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| e.to_string())?
+        .join("gateways");
+    fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    Ok(dir)
+}
+
+fn find_supervisor_script(app: &tauri::AppHandle) -> Option<std::path::PathBuf> {
+    let mut candidates: Vec<std::path::PathBuf> = Vec::new();
+    if let Ok(res) = app.path().resource_dir() {
+        candidates.push(res.join("gateways").join("supervisor.mjs"));
+    }
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            candidates.push(dir.join("gateways").join("supervisor.mjs"));
+            candidates.push(dir.join("..").join("gateways").join("supervisor.mjs"));
+        }
+    }
+    // Dev builds: the crate lives in <repo>/src-tauri, gateways in <repo>/gateways.
+    candidates.push(
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("gateways")
+            .join("supervisor.mjs"),
+    );
+    if let Ok(custom) = std::env::var("NULL_LIBRARY_GATEWAYS_DIR") {
+        candidates.push(std::path::PathBuf::from(custom).join("supervisor.mjs"));
+    }
+    candidates.into_iter().find(|p| p.exists())
+}
+
+fn find_node() -> Option<String> {
+    let probe = if cfg!(target_os = "windows") { "where" } else { "which" };
+    let output = std::process::Command::new(probe).arg("node").output().ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let path = String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .next()?
+        .trim()
+        .to_string();
+    if path.is_empty() { None } else { Some(path) }
+}
+
+#[tauri::command]
+fn gateway_supervisor(
+    app: tauri::AppHandle,
+    action: String,
+    seed_keys_json: Option<String>,
+) -> Result<String, String> {
+    let data_dir = gateway_data_dir(&app)?;
+    match action.as_str() {
+        "status" => {
+            let status_path = data_dir.join("status.json");
+            match fs::read_to_string(&status_path) {
+                Ok(contents) => Ok(contents),
+                Err(_) => Ok("{}".to_string()),
+            }
+        }
+        "start" | "stop" => {
+            let script = find_supervisor_script(&app)
+                .ok_or_else(|| "gateways/supervisor.mjs not found next to the app".to_string())?;
+            let node = find_node()
+                .ok_or_else(|| "Node.js was not found on PATH — the gateway supervisor needs Node 18+. Generation continues on Gemini direct.".to_string())?;
+            let sub = if action == "start" { "start" } else { "stop" };
+            let mut cmd = std::process::Command::new(&node);
+            cmd.arg(&script)
+                .arg(sub)
+                .env("NULL_GATEWAY_DATA_DIR", &data_dir);
+            if action == "start" {
+                if let Some(keys) = seed_keys_json {
+                    cmd.env("NULL_GATEWAY_SEED_KEYS", keys);
+                }
+            }
+            cmd.stdin(std::process::Stdio::null())
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null());
+            cmd.spawn().map_err(|e| e.to_string())?;
+            Ok("{}".to_string())
+        }
+        other => Err(format!("unknown gateway supervisor action: {other}")),
+    }
+}
+
 #[tauri::command]
 fn fetch_google_trends(_keyword: String) -> Option<serde_json::Value> {
     None
@@ -500,6 +599,7 @@ pub fn run() {
             set_secure_secret,
             get_secure_secret,
             delete_secure_secret,
+            gateway_supervisor,
             get_menu_blueprint,
         ])
         .run(tauri::generate_context!())

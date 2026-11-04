@@ -24,7 +24,13 @@ services:
     image: ghcr.io/tashfeenahmed/freellmapi:latest
     container_name: null-library-freellmapi
     ports:
-      - "3001:3001"
+      - "127.0.0.1:3001:3001"
+    # ENCRYPTION_KEY is required by FreeLLMAPI. The app's built-in
+    # supervisor generates and manages it automatically (runtime
+    # override in its data dir). For a manual start, create a .env
+    # next to this file first:  ENCRYPTION_KEY=<openssl rand -hex 32>
+    environment:
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-}
     volumes:
       - freellmapi-data:/data
     restart: unless-stopped
@@ -39,7 +45,7 @@ services:
     image: portkeyai/gateway:latest
     container_name: null-library-portkey
     ports:
-      - "8787:8787"
+      - "127.0.0.1:8787:8787"
     restart: unless-stopped
 
 volumes:

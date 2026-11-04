@@ -31,6 +31,10 @@ export interface GatewayConfig {
   baseUrl: string;
   apiKey: string;
   model: string;
+  /** When true, the built-in supervisor manages gateways end-to-end:
+   *  detection, startup, health, failover, and model choice. The
+   *  remaining fields then act as a record of what it decided. */
+  auto: boolean;
 }
 
 export interface GatewayPreset {
@@ -87,6 +91,7 @@ export const DEFAULT_GATEWAY_CONFIG: GatewayConfig = {
   baseUrl: '',
   apiKey: '',
   model: '',
+  auto: true,
 };
 
 export function loadGatewayConfig(): GatewayConfig {
@@ -99,6 +104,7 @@ export function loadGatewayConfig(): GatewayConfig {
       baseUrl: parsed.baseUrl || '',
       apiKey: parsed.apiKey || '',
       model: parsed.model || '',
+      auto: parsed.auto !== false,
     };
   } catch {
     return { ...DEFAULT_GATEWAY_CONFIG };
@@ -115,6 +121,42 @@ export function saveGatewayConfig(config: GatewayConfig): void {
 
 export function getPreset(id: GatewayPresetId): GatewayPreset {
   return GATEWAY_PRESETS.find((p) => p.id === id) || GATEWAY_PRESETS[0];
+}
+
+/**
+ * Ranked model preferences for auto mode. When the supervisor reports a
+ * gateway's live model list, the manager picks the first model whose id
+ * contains one of these substrings (best book-prose quality first among
+ * models commonly present on free tiers), falling back to the first
+ * chat-capable-looking model in the list.
+ */
+export const MODEL_PREFERENCE: string[] = [
+  'gemini-2.5-flash',
+  'gemini-2.0-flash',
+  'llama-3.3-70b',
+  'gpt-oss-120b',
+  'qwen3',
+  'qwen-2.5',
+  'deepseek-chat',
+  'deepseek-v3',
+  'mistral-large',
+  'gemini-2.5',
+  'gemini',
+  'llama',
+  'qwen',
+  'deepseek',
+];
+
+const NON_CHAT_HINTS = ['embed', 'whisper', 'tts', 'image', 'moderation', 'rerank', 'audio'];
+
+export function pickBestModel(models: string[]): string | null {
+  const chatty = models.filter((m) => !NON_CHAT_HINTS.some((h) => m.toLowerCase().includes(h)));
+  if (!chatty.length) return null;
+  for (const pref of MODEL_PREFERENCE) {
+    const hit = chatty.find((m) => m.toLowerCase().includes(pref));
+    if (hit) return hit;
+  }
+  return chatty[0];
 }
 
 /** True when chapter-text stages should route through a gateway. */

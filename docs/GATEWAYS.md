@@ -26,7 +26,44 @@ of the gateway setting. If the gateway errors or is offline, the text
 stages **fall back to Gemini automatically**; selecting a gateway can
 never make generation less reliable than the default.
 
-## 1. Start a gateway
+## 0. Automatic mode (default) — do nothing
+
+Gateway Routing ships in **Fully automatic** mode. In the desktop app,
+a built-in supervisor (`gateways/supervisor.mjs`, spawned by the app —
+no terminal, no Docker commands, nothing to configure):
+
+1. **Detects your machine** — OS/arch, whether Docker (and its daemon)
+   or Node/npx is available, which ports are free, and whether a
+   gateway is already running (it adopts healthy ones instead of
+   starting duplicates).
+2. **Provisions with the best settings for the machine** — Docker
+   Compose when available (npx for Portkey otherwise), localhost-only
+   binding, alternate ports on conflict, and a generated, persisted
+   encryption key for FreeLLMAPI. It also builds FreeLLMAPI's
+   *declarative startup config* from the provider keys Null Library
+   already holds (your Gemini key, plus Groq/OpenRouter if you ever add
+   them), so FreeLLMAPI boots pre-loaded — no dashboard step.
+3. **Runs and maintains them** — health checks every 20 seconds,
+   restarts with exponential backoff and an hourly budget, port
+   failover, and a primary-gateway choice (FreeLLMAPI first, Portkey
+   second) that the app follows automatically, including picking the
+   best available model for book generation from the gateway's live
+   model list.
+4. **Asks the AI when it's stuck** — if a gateway fails in a way the
+   rules don't cover, the in-app manager sends the (secret-free) error
+   to Gemini once and lets it pick from a fixed menu: restart, switch
+   gateway, wait, or give up. The AI never gets a shell.
+
+Watch it work — or ignore it entirely — in the footer **Gateway
+Routing** panel, which shows live status and the supervisor's decision
+log. Turn the toggle off there to manage gateways manually (below).
+State and logs live outside the repo in the app's data folder
+(`gateways/status.json`, `supervisor.log`); seed keys travel only via
+process environment, never into files in this repo or into logs.
+
+Standalone use: `node gateways/supervisor.mjs probe|start|status|stop`.
+
+## 1. Start a gateway (manual mode)
 
 ### Option A — Docker (from this repo)
 

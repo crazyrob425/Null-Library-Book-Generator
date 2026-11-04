@@ -31,6 +31,7 @@ import { useAutoSave } from './hooks/useAutoSave';
 import AutoSaveIndicator from './components/shared/AutoSaveIndicator';
 import { GatewaySettingsPanel } from './components/shared/GatewaySettingsPanel';
 import { GatewayConfig, getPreset, loadGatewayConfig, saveGatewayConfig } from './services/gatewayService';
+import { startGatewayAutomation, subscribeGatewayManager } from './services/gatewayManager';
 
 const pageRangeToChapterCount = (pageRange: string): number => {
     const firstNum = parseInt(pageRange.split('-')[0], 10);
@@ -93,6 +94,18 @@ function App() {
   // NEW: Live token counter
   const [totalTokens, setTotalTokens] = useState(0);
   const [gatewayConfig, setGatewayConfig] = useState<GatewayConfig>(() => loadGatewayConfig());
+
+  // Auto mode: the supervisor manages gateways end-to-end. Start it on
+  // launch and mirror its decisions (primary gateway, model) into state.
+  useEffect(() => {
+    const initial = loadGatewayConfig();
+    if (initial.auto) {
+      void startGatewayAutomation({ geminiApiKey: import.meta.env.VITE_GOOGLE_API_KEY as string | undefined });
+    }
+    return subscribeGatewayManager(() => {
+      setGatewayConfig(loadGatewayConfig());
+    });
+  }, []);
   const [isGatewayPanelOpen, setIsGatewayPanelOpen] = useState(false);
   useEffect(() => {
     const interval = setInterval(() => setTotalTokens(getTotalEstimatedTokens()), 5000);
@@ -1285,7 +1298,13 @@ function App() {
                className="rounded-full border border-slate-700 bg-slate-900/80 px-2.5 py-1 text-[11px] font-medium text-slate-300 transition hover:border-cyan-500/60 hover:text-cyan-200"
                title="Gateway routing settings"
              >
-               {gatewayConfig.preset === 'gemini-direct' ? '✦ Gemini Direct' : `⚡ ${getPreset(gatewayConfig.preset).shortLabel}`}
+               {gatewayConfig.auto
+                 ? gatewayConfig.preset === 'gemini-direct'
+                   ? '⚡ Auto · Gemini Direct'
+                   : `⚡ Auto · ${getPreset(gatewayConfig.preset).shortLabel}`
+                 : gatewayConfig.preset === 'gemini-direct'
+                   ? '✦ Gemini Direct'
+                   : `⚡ ${getPreset(gatewayConfig.preset).shortLabel}`}
              </button>
              <span>App v1.5.0</span>
         </div>

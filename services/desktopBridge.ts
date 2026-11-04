@@ -37,6 +37,12 @@ export interface DesktopBridge {
   setSecureSecret: (descriptor: SecretDescriptor, value: string) => Promise<void>;
   getSecureSecret: (secretKey: string) => Promise<string | null>;
   deleteSecureSecret: (secretKey: string) => Promise<void>;
+
+  /** Gateway supervisor lifecycle (gateways/supervisor.mjs). Status
+   *  returns the supervisor's status.json contents as a string. */
+  gatewaySupervisorStart: (seedKeys: { geminiApiKey?: string }) => Promise<void>;
+  gatewaySupervisorStop: () => Promise<void>;
+  gatewaySupervisorStatus: () => Promise<string>;
 }
 
 const isElectron = () => typeof window !== 'undefined' && !!window.electronAPI;
@@ -97,6 +103,11 @@ const browserBridge: DesktopBridge = {
   setSecureSecret: async () => {},
   getSecureSecret: async () => null,
   deleteSecureSecret: async () => {},
+  gatewaySupervisorStart: async () => {
+    throw new Error('Gateway auto-setup is only available in the desktop runtime.');
+  },
+  gatewaySupervisorStop: async () => {},
+  gatewaySupervisorStatus: async () => '{}',
 };
 
 const electronBridge: DesktopBridge = {
@@ -122,6 +133,11 @@ const electronBridge: DesktopBridge = {
   setSecureSecret: async () => {},
   getSecureSecret: async () => null,
   deleteSecureSecret: async () => {},
+  gatewaySupervisorStart: async () => {
+    throw new Error('Gateway auto-setup is only available in the Tauri desktop runtime.');
+  },
+  gatewaySupervisorStop: async () => {},
+  gatewaySupervisorStatus: async () => '{}',
 };
 
 const tauriBridge: DesktopBridge = {
@@ -216,6 +232,13 @@ const tauriBridge: DesktopBridge = {
   deleteSecureSecret: async (secretKey) => {
     await invoke('delete_secure_secret', { secretKey });
   },
+  gatewaySupervisorStart: async (seedKeys) => {
+    await invoke('gateway_supervisor', { action: 'start', seedKeysJson: JSON.stringify(seedKeys || {}) });
+  },
+  gatewaySupervisorStop: async () => {
+    await invoke('gateway_supervisor', { action: 'stop', seedKeysJson: null });
+  },
+  gatewaySupervisorStatus: async () => invoke<string>('gateway_supervisor', { action: 'status', seedKeysJson: null }),
 };
 
 const desktopBridge: DesktopBridge = isElectron() ? electronBridge : isTauri() ? tauriBridge : browserBridge;
