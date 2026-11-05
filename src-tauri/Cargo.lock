@@ -1658,7 +1658,6 @@ version = "2.1.0"
 dependencies = [
  "keyring",
  "log",
- "rand 0.8.5",
  "serde",
  "serde_json",
  "tauri",
@@ -1666,7 +1665,6 @@ dependencies = [
  "tauri-plugin-dialog",
  "tauri-plugin-fs",
  "tauri-plugin-log",
- "url",
 ]
 
 [[package]]
