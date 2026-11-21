@@ -24,6 +24,8 @@
  * API keys never leave the machine except to the gateway URL configured.
  */
 
+import { consumeSseBuffer } from './sseStream';
+
 export type GatewayPresetId = 'gemini-direct' | 'freellmapi' | 'portkey' | 'custom';
 
 export interface GatewayConfig {
@@ -256,31 +258,22 @@ export async function generateTextStreamViaGateway(
     const decoder = new TextDecoder();
     let buffer = '';
     let accumulated = '';
+    const absorb = (flush: boolean) => {
+      const consumed = consumeSseBuffer(buffer, flush);
+      buffer = consumed.rest;
+      if (!consumed.text) return;
+      accumulated += consumed.text;
+      onChunk(accumulated);
+    };
     for (;;) {
       const { done, value } = await reader.read();
       if (done) break;
       buffer += decoder.decode(value, { stream: true });
-      const frames = buffer.split('\n\n');
-      buffer = frames.pop() || '';
-      for (const frame of frames) {
-        for (const line of frame.split('\n')) {
-          const trimmed = line.trim();
-          if (!trimmed.startsWith('data:')) continue;
-          const payload = trimmed.slice(5).trim();
-          if (payload === '[DONE]') continue;
-          try {
-            const json = JSON.parse(payload);
-            const delta: string = json?.choices?.[0]?.delta?.content || '';
-            if (delta) {
-              accumulated += delta;
-              onChunk(accumulated);
-            }
-          } catch {
-            // partial frame — ignore
-          }
-        }
-      }
+      absorb(false);
     }
+    buffer += decoder.decode();
+    // The last data frame often arrives without a trailing blank line.
+    absorb(true);
     if (!accumulated.trim()) throw new Error('Gateway stream produced no text.');
     return accumulated;
   } finally {

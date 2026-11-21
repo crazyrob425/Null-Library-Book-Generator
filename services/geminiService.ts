@@ -14,6 +14,8 @@ import {
   shortCache,
 } from './tokenOptimizer';
 import { isGatewayActive, generateTextViaGateway, generateTextStreamViaGateway } from './gatewayService';
+import { chapterTextForRewrite, rewriteOrKeep } from './chapterRewrite';
+import { deltaFromAccumulated } from './sseStream';
 
 
 let aiInstance: GoogleGenAI | null = null;
@@ -255,13 +257,14 @@ export const generateChapterContent = async (chapterTitle: string, chapterSummar
 };
 
 export const regenerateChapterWithGuidance = async (chapterTitle: string, chapterSummary: string, currentContent: string, lengthGuidance: string, instructions?: string): Promise<string> => {
-    // Excerpt the current draft to avoid sending huge content back verbatim
-    const draftExcerpt = excerptContext(currentContent, 400, 200, 200);
+    // The UI replaces the stored chapter with this result, so the model
+    // has to see the whole draft. An excerpt here deletes the middle.
+    const draft = chapterTextForRewrite(currentContent);
     const prompt = compactText(`Rewrite the chapter "${chapterTitle}".
     Summary: ${truncateToTokenBudget(chapterSummary, 100)}
-    Current Draft (excerpted):
+    Current Draft:
     ---
-    ${draftExcerpt}
+    ${draft}
     ---
     Instructions: ${truncateToTokenBudget(instructions || 'Improve flow, clarity, and engagement. Maintain the core message.', 80)}
     Target Length: ${lengthGuidance}
@@ -272,7 +275,7 @@ export const regenerateChapterWithGuidance = async (chapterTitle: string, chapte
         model: 'gemini-2.5-flash',
         contents: prompt
     }));
-    return response.text || '';
+    return rewriteOrKeep(currentContent, response.text);
 };
 
 export const generateImagePrompt = async (chapterExcerpt: string, style?: string): Promise<string> => {
@@ -345,18 +348,18 @@ export const generateStockPhotoSuggestions = async (query: string): Promise<{pro
 };
 
 export const humanizeChapterContent = async (content: string): Promise<string> => {
-    // Use excerptContext to avoid sending the full chapter; humanize the most
-    // representative portions rather than truncating to an arbitrary head slice.
-    const excerpt = excerptContext(content, 500, 250, 250);
+    // Callers (pipeline stage 6, batch mode, the Humanize action) store this
+    // return value as the chapter. The model must see every paragraph.
+    const source = chapterTextForRewrite(content);
     const prompt = compactText(`Rewrite the following text to sound more natural, human, and engaging. Remove robotic phrasing and repetitive structures.
     Text:
-    ${excerpt}`);
+    ${source}`);
     recordTokenUsage('humanizeChapterContent', prompt);
 
   if (isGatewayActive()) {
     try {
       console.log('[Gateway] Routing humanize pass through the configured gateway.');
-      return await generateTextViaGateway(prompt);
+      return rewriteOrKeep(content, await generateTextViaGateway(prompt));
     } catch (gatewayError) {
       console.warn('[Gateway] Humanize failed — falling back to Gemini:', gatewayError);
     }
@@ -366,7 +369,7 @@ export const humanizeChapterContent = async (content: string): Promise<string> =
         model: 'gemini-2.5-flash',
         contents: prompt
     }));
-    return response.text || content;
+    return rewriteOrKeep(content, response.text);
 };
 
 export const generateKdpMarketingInfo = async (marketReport: MarketReport, outline: BookOutline): Promise<KdpMarketingInfo> => {
@@ -599,9 +602,9 @@ export const generateLiteraryCritique = async (chapterTitle: string, chapterCont
 };
 
 export const applyLiteraryCritique = async (chapterTitle: string, currentContent: string, critique: string): Promise<string> => {
-    // Excerpt the content; the model rewrites from the critique instructions,
-    // so sending a representative sample is sufficient to preserve style/voice.
-    const excerpt = excerptContext(currentContent, 600, 300, 200);
+    // Pipeline stage 8 and the critic dialog replace the chapter with this
+    // rewrite. A head/middle/tail sample would discard the rest of the prose.
+    const source = chapterTextForRewrite(currentContent);
     // The critique itself is structured markdown and should stay complete
     const critiqueCompact = truncateToTokenBudget(critique, 500);
     const prompt = compactText(`You are the **Grand Master Editor**.
@@ -610,9 +613,9 @@ export const applyLiteraryCritique = async (chapterTitle: string, currentContent
 
     **Chapter Title:** "${chapterTitle}"
 
-    **Original Content (representative excerpt):**
+    **Original Content:**
     ---
-    ${excerpt}
+    ${source}
     ---
 
     **Scholar's Critique & Instructions:**
@@ -636,7 +639,7 @@ export const applyLiteraryCritique = async (chapterTitle: string, currentContent
     content = content.replace(/^Of course[\s\S]*?Here is the.*?(\*\*\*\s*)?/i, '');
     content = content.trim().replace(/^Chapter\s+\d+[:\s].*?\n+/i, '');
 
-    return content.trim();
+    return rewriteOrKeep(currentContent, content);
 };
 
 export const quickEnhanceAuthorProfile = async (currentProfile: AuthorProfile): Promise<Partial<AuthorProfile>> => {
@@ -728,7 +731,15 @@ Format: Markdown. Do not include the chapter title at the start.${contextBlock}`
     if (isGatewayActive()) {
       try {
         console.log('[Gateway] Routing streamed chapter generation through the configured gateway.');
-        return await generateTextStreamViaGateway(prompt, onChunk);
+        // The gateway callback is the full text so far. This caller, and the
+        // Gemini stream below, both append deltas. Forward only the new suffix
+        // or every token is repeated in the editor and in autosave.
+        let sent = '';
+        return await generateTextStreamViaGateway(prompt, (full) => {
+          const step = deltaFromAccumulated(sent, full);
+          sent = step.previous;
+          if (step.delta) onChunk(step.delta);
+        });
       } catch (gatewayError) {
         console.warn('[Gateway] Streaming failed — falling back to Gemini:', gatewayError);
       }
