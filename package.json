@@ -5,6 +5,7 @@
   "description": "AI-Powered Book Generation Platform - Hardened & Optimized with Local GPT4All LLM",
   "scripts": {
     "dev": "vite",
+    "test": "node --experimental-strip-types --test services/*.test.ts",
     "build": "vite build",
     "preview": "vite preview",
     "tauri": "tauri",

@@ -73,7 +73,11 @@ export function truncateToTokenBudget(
 /**
  * Extract a representative excerpt from a long text.
  * Takes the first `headTokens` tokens, a middle sample, and the last `tailTokens` tokens.
- * Useful for critique / review tasks that need global context without reading everything.
+ * Useful for read-only critique prompts that need a global sample.
+ *
+ * Do not feed this to a prompt whose output replaces stored chapter text.
+ * The omitted middle is then deleted from the manuscript. Use
+ * chapterTextForRewrite for humanize, guided regenerate, and critique-apply.
  */
 export function excerptContext(
   text: string,
