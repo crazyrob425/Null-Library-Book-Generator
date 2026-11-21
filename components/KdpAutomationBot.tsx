@@ -4,6 +4,7 @@ import Button from './shared/Button';
 import { RobotIcon, TerminalIcon, ShieldCheckIcon, CheckCircleIcon } from './icons';
 import LoadingSpinner from './shared/LoadingSpinner';
 import desktopBridge from '../services/desktopBridge';
+import { buildDesktopAutomationPayload } from '../services/kdpAutomationPayload';
 
 interface KdpAutomationBotProps extends KdpAutomationPayload {
   onClose: () => void;
@@ -30,26 +31,34 @@ interface KdpAutomationBotProps extends KdpAutomationPayload {
       }, [logs]);
   
       useEffect(() => {
+          // Mount-only. `props` is a new object on every render (it includes
+          // onClose). Depending on it re-ran this effect after the first log,
+          // and the cleanup called stopAutomation(), which aborted the publish
+          // and started another one. The screen is mounted for a single run.
+          let cancelled = false;
           addLog(`Initializing Electron IPC for KDP Automation...`);
-          
+
           const startBot = async () => {
               try {
-                  // We need to convert blobs to base64 to send them over IPC (same as WS)
+                  // Blobs cannot cross IPC. Send a data URL, and only the
+                  // fields the worker reads — props.onClose is a function and
+                  // Electron's structured clone rejects it.
                   const epubBase64 = await blobToBase64(props.epubBlob);
-                  const payload = {
-                      ...props,
-                      epubBlob: epubBase64,
-                  };
-                  
-                  await desktopBridge.startAutomation(payload);
+                  if (cancelled) return;
+                  const payload = buildDesktopAutomationPayload(props, epubBase64);
+                  await desktopBridge.startAutomation(payload as unknown as KdpAutomationPayload);
+                  if (cancelled) {
+                      await desktopBridge.stopAutomation();
+                  }
               } catch (e) {
+                  if (cancelled) return;
                   addLog(`Error preparing payload: ${(e as Error).message}`);
                   setStatus('error');
               }
           };
-          
-          startBot();
-  
+
+          void startBot();
+
           // Listen for updates
           const removeListener = desktopBridge.onAutomationUpdate((update) => {
                switch (update.type) {
@@ -79,11 +88,11 @@ interface KdpAutomationBotProps extends KdpAutomationPayload {
           });
   
           return () => {
+              cancelled = true;
               removeListener();
               void desktopBridge.stopAutomation();
-              addLog('Automation stopped.');
           };
-      }, [props]);
+      }, []);
       
       const blobToBase64 = (blob: Blob): Promise<string> => {
           return new Promise((resolve, reject) => {
