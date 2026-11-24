@@ -901,26 +901,9 @@ function App() {
     }
   }, [authorProfile]);
 
-
-  if (mode === AppMode.Batch) {
-    return <BatchMode
-              onExit={() => {
-                setMode(AppMode.Single);
-                setIsBatchRunning(false);
-                setBatchProjects([]);
-              }}
-              onStartBatch={handleStartBatchGeneration}
-              projects={batchProjects}
-              isRunning={isBatchRunning}
-           />
-  }
-
-  if (automationPayload) {
-    return <KdpAutomationBot {...automationPayload} onClose={() => setAutomationPayload(null)} />;
-  }
-  
-  // Loading State for DB
-  // NATIVE FILE SYSTEM HANDLERS
+  // These handlers and the menu subscription must stay above every conditional
+  // return. Batch mode and the KDP bot return early; a hook after that return
+  // changes the hook count and React unmounts the tree.
   const handleSaveProject = async () => {
     const projectState = {
         version: 1,
@@ -1032,6 +1015,23 @@ function App() {
       unlisten();
     };
   }, [handleLoadProject, handleSaveProject, resetProjectState]);
+
+  if (mode === AppMode.Batch) {
+    return <BatchMode
+              onExit={() => {
+                setMode(AppMode.Single);
+                setIsBatchRunning(false);
+                setBatchProjects([]);
+              }}
+              onStartBatch={handleStartBatchGeneration}
+              projects={batchProjects}
+              isRunning={isBatchRunning}
+           />
+  }
+
+  if (automationPayload) {
+    return <KdpAutomationBot {...automationPayload} onClose={() => setAutomationPayload(null)} />;
+  }
 
   if (isLoading) {
       return (
